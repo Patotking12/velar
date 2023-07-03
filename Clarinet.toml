@@ -1,0 +1,64 @@
+[project]
+name = "velar"
+authors = []
+description = ""
+telemetry = true
+requirements = []
+boot_contracts = ["pox", "costs-v2", "bns"]
+
+[project.cache_location]
+path = ".requirements"
+[contracts.DAI]
+path = "contracts/DAI.clar"
+
+[contracts.ETH]
+path = "contracts/ETH.clar"
+
+[contracts.ETH-2]
+path = "contracts/ETH-2.clar"
+
+[contracts.core]
+path = "contracts/core.clar"
+
+[contracts.distributor]
+path = "contracts/distributor.clar"
+
+[contracts.ft-plus-trait]
+path = "contracts/ft-plus-trait.clar"
+
+[contracts.library-v2]
+path = "contracts/library-v2.clar"
+
+[contracts.lp-token]
+path = "contracts/lp-token.clar"
+
+[contracts.lp-token-2]
+path = "contracts/lp-token-2.clar"
+
+[contracts.router]
+path = "contracts/router.clar"
+
+[contracts.sip-010-trait-ft-standard]
+path = "contracts/sip-010-trait-ft-standard.clar"
+
+[contracts.staking]
+path = "contracts/staking.clar"
+
+[contracts.token-mngr-trait]
+path = "contracts/token-mngr-trait.clar"
+
+[contracts.velar]
+path = "contracts/velar.clar"
+
+[repl]
+costs_version = 2
+parser_version = 2
+
+[repl.analysis]
+passes = ["check_checker"]
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
