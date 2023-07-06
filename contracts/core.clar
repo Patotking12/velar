@@ -767,7 +767,7 @@
           }
         )
       )
-      ;; (print event)
+      (print event)
       (ok event)
     )
   )
