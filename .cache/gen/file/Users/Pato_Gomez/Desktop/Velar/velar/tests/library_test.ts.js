@@ -1,0 +1,626 @@
+import { Clarinet, Tx, types } from 'https://deno.land/x/clarinet@v1.6.0/index.ts';
+import { assertEquals } from 'https://deno.land/std@0.90.0/testing/asserts.ts';
+import { swap_fee } from './contants.ts';
+import { n, check, checkErr, fee } from './util.ts';
+const deployer = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+// const err_library_preconditions = 0
+const quote = (chain, amtIn, reserveIn, reserveOut)=>chain.callReadOnlyFn('library', 'quote', [
+        types.uint(amtIn),
+        types.uint(reserveIn),
+        types.uint(reserveOut)
+    ], deployer);
+const getAmountOut = (chain, amtIn, reserveIn, reserveOut)=>chain.callReadOnlyFn('library', 'get-amount-out', [
+        types.uint(amtIn),
+        types.uint(reserveIn),
+        types.uint(reserveOut),
+        swap_fee, 
+    ], deployer);
+const getAmountsOut = (amtIn, root, path)=>Tx.contractCall('library', 'get-amounts-out', [
+        types.uint(amtIn),
+        types.principal(root),
+        types.list(path.map(types.principal)), 
+    ], deployer);
+const getAmountIn = (chain, amtOut, reserveIn, reserveOut)=>chain.callReadOnlyFn('library', 'get-amount-in', [
+        types.uint(amtOut),
+        types.uint(reserveIn),
+        types.uint(reserveOut),
+        swap_fee, 
+    ], deployer);
+const getAmountInFee = (chain, amtOut, reserveIn, reserveOut, swapFee)=>chain.callReadOnlyFn('library', 'get-amount-in', [
+        types.uint(amtOut),
+        types.uint(reserveIn),
+        types.uint(reserveOut),
+        fee(swapFee[0], swapFee[1]), 
+    ], deployer);
+// uint: 128 bits (~10**38)
+Clarinet.test({
+    name: "get-amount-out fails on 0-values",
+    async fn (chain) {
+        let results = [
+            getAmountOut(chain, 0, 1000, 1000),
+            getAmountOut(chain, 100, 0, 1000),
+            getAmountOut(chain, 100, 1000, 0),
+            // precondition (not in uniwsap): amount-id-adj < 0
+            getAmountOut(chain, 1, 1000000000000000, 1000000000000000), 
+        ];
+        assertEquals(results.length, 4);
+        results.map(checkErr);
+    }
+});
+Clarinet.test({
+    name: "get-amount-out returns same values as Uniswap lib.",
+    async fn (chain) {
+        const tests = [
+            [
+                [
+                    1000000,
+                    '1000000000000000000000000000000000',
+                    1
+                ],
+                0
+            ],
+            [
+                [
+                    1000,
+                    1000000000000,
+                    1000
+                ],
+                0
+            ],
+            [
+                [
+                    1000,
+                    '1000000000000000000000000000000',
+                    1000
+                ],
+                0
+            ],
+            [
+                [
+                    1_000_000_000,
+                    1_000_000_000_000_000,
+                    1_000_000_000_000_000
+                ],
+                996_999_005
+            ],
+            [
+                [
+                    '1000000000000000000000000000000',
+                    '1000000000000000000000000000',
+                    1
+                ],
+                0
+            ],
+            [
+                [
+                    '1000000000000000000000000000',
+                    '1000000000000000000000000000',
+                    1
+                ],
+                0
+            ],
+            [
+                [
+                    1000000000000000,
+                    1000000,
+                    1000000
+                ],
+                999999
+            ],
+            [
+                [
+                    10_000,
+                    1_000_000,
+                    1_000_000
+                ],
+                9_871
+            ],
+            [
+                [
+                    2000000,
+                    n(32),
+                    n(32)
+                ],
+                1993999
+            ],
+            [
+                [
+                    4,
+                    99_990_135,
+                    100_010_103
+                ],
+                3
+            ],
+            [
+                [
+                    2,
+                    2 * 10 ** 18,
+                    n(18)
+                ],
+                0
+            ],
+            [
+                [
+                    2,
+                    n(21),
+                    1
+                ],
+                0
+            ],
+            [
+                [
+                    1000,
+                    n(20),
+                    n(20)
+                ],
+                996
+            ],
+            [
+                [
+                    2000,
+                    n(20),
+                    n(20)
+                ],
+                1_993
+            ],
+            [
+                [
+                    20000,
+                    n(20),
+                    n(20)
+                ],
+                19_939
+            ],
+            [
+                [
+                    200000,
+                    n(20),
+                    n(20)
+                ],
+                199_399
+            ],
+            [
+                [
+                    2000000,
+                    n(20),
+                    n(20)
+                ],
+                1_993_999
+            ],
+            [
+                [
+                    1000,
+                    1000,
+                    1000
+                ],
+                499
+            ],
+            [
+                [
+                    2000,
+                    1000,
+                    1000
+                ],
+                665
+            ],
+            [
+                [
+                    20,
+                    100000,
+                    1000
+                ],
+                0
+            ],
+            [
+                [
+                    10000,
+                    1000,
+                    1000
+                ],
+                908
+            ],
+            [
+                [
+                    n(10),
+                    n(18),
+                    2 * 10 ** 18
+                ],
+                19939999801
+            ], 
+        ];
+        const failingTests = [
+            [
+                [
+                    2,
+                    n(18),
+                    n(18)
+                ],
+                1
+            ],
+            [
+                [
+                    2,
+                    n(18),
+                    2 * 10 ** 18
+                ],
+                3
+            ],
+            [
+                [
+                    20,
+                    n(20),
+                    n(20)
+                ],
+                19
+            ],
+            [
+                [
+                    200,
+                    n(20),
+                    n(20)
+                ],
+                199
+            ],
+            [
+                [
+                    10,
+                    n(20),
+                    n(20)
+                ],
+                9
+            ],
+            [
+                [
+                    100,
+                    n(20),
+                    n(20)
+                ],
+                99
+            ],
+            [
+                [
+                    300,
+                    n(20),
+                    n(20)
+                ],
+                299
+            ]
+        ];
+        let results = tests.map(([inputs])=>getAmountOut(chain, ...inputs));
+        tests.map(([, exp], i)=>check(exp, results[i]));
+        results = failingTests.map(([inputs])=>getAmountOut(chain, ...inputs));
+        failingTests.map(([, exp], i)=>check(exp, results[i]));
+    }
+});
+Clarinet.test({
+    name: "get-amount-in returns same values as Uniswap lib.",
+    async fn (chain) {
+        const errors = [
+            [
+                [
+                    1000,
+                    1000,
+                    1000
+                ]
+            ],
+            [
+                [
+                    2000,
+                    1000,
+                    1000
+                ]
+            ],
+            [
+                [
+                    10000,
+                    1000,
+                    1000
+                ]
+            ],
+            [
+                [
+                    2,
+                    n(21),
+                    1
+                ]
+            ]
+        ];
+        const tests = [
+            [
+                [
+                    '1000000000000000000000000',
+                    1000,
+                    '1000000000000000000000000000000000'
+                ],
+                1
+            ],
+            [
+                [
+                    '1000000000000000000',
+                    1000,
+                    '1000000000000000000000000'
+                ],
+                1
+            ],
+            [
+                [
+                    '1000000000000000000',
+                    1000000,
+                    '1000000000000000000000000'
+                ],
+                2
+            ],
+            [
+                [
+                    1000,
+                    1000000000,
+                    '1000000000000000000000000'
+                ],
+                1
+            ],
+            [
+                [
+                    1000000000000,
+                    1,
+                    '1000000000000000000000000000000'
+                ],
+                1
+            ],
+            [
+                [
+                    1000,
+                    1,
+                    '1000000000000000000000000000000000000'
+                ],
+                1
+            ],
+            [
+                [
+                    1000000000,
+                    '1000000000000000000000000000',
+                    1000000000000000
+                ],
+                '1003010030091273822468'
+            ],
+            [
+                [
+                    1000,
+                    '1000000000000000000000000',
+                    1000000000000000
+                ],
+                1003009027083
+            ],
+            [
+                [
+                    1000000,
+                    1,
+                    1000000000000000
+                ],
+                1
+            ],
+            [
+                [
+                    2000000,
+                    n(32),
+                    n(32)
+                ],
+                2006019
+            ],
+            [
+                [
+                    4,
+                    99_990_135,
+                    100_010_103
+                ],
+                5
+            ],
+            [
+                [
+                    2,
+                    n(18),
+                    n(18)
+                ],
+                3
+            ],
+            [
+                [
+                    2,
+                    10 ** 20,
+                    10 ** 20
+                ],
+                3
+            ],
+            [
+                [
+                    2,
+                    n(20),
+                    n(20)
+                ],
+                3
+            ],
+            [
+                [
+                    20,
+                    n(20),
+                    n(20)
+                ],
+                21
+            ],
+            [
+                [
+                    200,
+                    n(20),
+                    n(20)
+                ],
+                201
+            ],
+            [
+                [
+                    10,
+                    n(20),
+                    n(20)
+                ],
+                11
+            ],
+            [
+                [
+                    100,
+                    n(20),
+                    n(20)
+                ],
+                101
+            ],
+            [
+                [
+                    300,
+                    n(20),
+                    n(20)
+                ],
+                301
+            ],
+            [
+                [
+                    1000,
+                    n(20),
+                    n(20)
+                ],
+                1004
+            ],
+            [
+                [
+                    2000,
+                    n(20),
+                    n(20)
+                ],
+                2007
+            ],
+            [
+                [
+                    20000,
+                    n(20),
+                    n(20)
+                ],
+                20_061
+            ],
+            [
+                [
+                    200000,
+                    n(20),
+                    n(20)
+                ],
+                200_602
+            ],
+            [
+                [
+                    2000000,
+                    n(20),
+                    n(20)
+                ],
+                2_006_019
+            ], 
+        ];
+        let results = tests.map(([inputs])=>getAmountIn(chain, ...inputs));
+        tests.map(([, exp], i)=>check(exp, results[i]));
+    }
+});
+Clarinet.test({
+    name: "get-amount-in fails on 0-values",
+    async fn (chain) {
+        let results = [
+            getAmountIn(chain, 0, 1000000, 1000000),
+            getAmountIn(chain, 10000000, 0, 1000000),
+            getAmountIn(chain, 1000, 1000000, 0), 
+        ];
+        results.map(checkErr);
+    }
+});
+Clarinet.test({
+    name: "quote returns same values as Uniswap lib.",
+    async fn (chain) {
+        const tests = [
+            [
+                [
+                    '1000000000000000000',
+                    '1000000000000000000000',
+                    1000000000000
+                ],
+                1000000000
+            ],
+            [
+                [
+                    1000000000000000,
+                    1000000000000000,
+                    1000000000000000
+                ],
+                1000000000000000
+            ],
+            [
+                [
+                    1000000000,
+                    1000000000000,
+                    '1000000000000000000000000'
+                ],
+                '1000000000000000000000'
+            ],
+            [
+                [
+                    '1000000000000000000000000000000',
+                    1000000,
+                    1000
+                ],
+                '1000000000000000000000000000'
+            ],
+            [
+                [
+                    1,
+                    1000000000,
+                    '1000000000000000000'
+                ],
+                1000000000
+            ],
+            [
+                [
+                    '1000000000000000000000000',
+                    '1000000000000000000000',
+                    1000000
+                ],
+                1000000000
+            ],
+            [
+                [
+                    1,
+                    1000000,
+                    '1000000000000000000000000000'
+                ],
+                '1000000000000000000000'
+            ],
+            [
+                [
+                    1000000000,
+                    1000000000000,
+                    '1000000000000000000'
+                ],
+                1000000000000000
+            ],
+            [
+                [
+                    1000000,
+                    1000000,
+                    1000000
+                ],
+                1000000
+            ],
+            [
+                [
+                    '1000000000000000000',
+                    '1000000000000000000000000000000',
+                    1000
+                ],
+                0
+            ], 
+        ];
+        let results = tests.map(([inputs])=>quote(chain, ...inputs));
+        tests.map(([, exp], i)=>check(exp, results[i]));
+    }
+});
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImZpbGU6Ly8vVXNlcnMvUGF0b19Hb21lei9EZXNrdG9wL1ZlbGFyL3ZlbGFyL3Rlc3RzL2xpYnJhcnlfdGVzdC50cyJdLCJzb3VyY2VzQ29udGVudCI6WyJcbmltcG9ydCB7IENsYXJpbmV0LCBUeCwgQ2hhaW4sIEFjY291bnQsIHR5cGVzLCBFbXB0eUJsb2NrIH0gZnJvbSAnaHR0cHM6Ly9kZW5vLmxhbmQveC9jbGFyaW5ldEB2MS42LjAvaW5kZXgudHMnO1xuaW1wb3J0IHsgYXNzZXJ0RXF1YWxzIH0gZnJvbSAnaHR0cHM6Ly9kZW5vLmxhbmQvc3RkQDAuOTAuMC90ZXN0aW5nL2Fzc2VydHMudHMnO1xuaW1wb3J0IHsgc3dhcF9mZWUgfSBmcm9tICcuL2NvbnRhbnRzLnRzJztcbmltcG9ydCB7IG4sIGNoZWNrLCBjaGVja0VyciwgZmVlIH0gZnJvbSAnLi91dGlsLnRzJ1xuXG5jb25zdCBkZXBsb3llciA9ICdTVDFQUUhRS1YwUkpYWkZZMURHWDhNTlNOWVZFM1ZHWkpTUlRQR1pHTSdcblxuLy8gY29uc3QgZXJyX2xpYnJhcnlfcHJlY29uZGl0aW9ucyA9IDBcblxuY29uc3QgcXVvdGUgPSAoY2hhaW46IENoYWluLCBhbXRJbjogbnVtYmVyLCByZXNlcnZlSW46IG51bWJlciwgcmVzZXJ2ZU91dDogbnVtYmVyKSA9PlxuICAgIGNoYWluLmNhbGxSZWFkT25seUZuKCdsaWJyYXJ5JywgJ3F1b3RlJywgW1xuICAgICAgICB0eXBlcy51aW50KGFtdEluKSxcbiAgICAgICAgdHlwZXMudWludChyZXNlcnZlSW4pLFxuICAgICAgICB0eXBlcy51aW50KHJlc2VydmVPdXQpXG4gICAgXSwgZGVwbG95ZXIpXG5cbmNvbnN0IGdldEFtb3VudE91dCA9IChjaGFpbjogQ2hhaW4sIGFtdEluOiBudW1iZXIsIHJlc2VydmVJbjogbnVtYmVyLCByZXNlcnZlT3V0OiBudW1iZXIpID0+XG4gICAgY2hhaW4uY2FsbFJlYWRPbmx5Rm4oJ2xpYnJhcnknLCAnZ2V0LWFtb3VudC1vdXQnLCBbXG4gICAgICAgIHR5cGVzLnVpbnQoYW10SW4pLFxuICAgICAgICB0eXBlcy51aW50KHJlc2VydmVJbiksXG4gICAgICAgIHR5cGVzLnVpbnQocmVzZXJ2ZU91dCksXG4gICAgICAgIHN3YXBfZmVlLFxuICBdLCBkZXBsb3llcilcblxuY29uc3QgZ2V0QW1vdW50c091dCA9IChhbXRJbjogbnVtYmVyLCByb290OiBzdHJpbmcsIHBhdGg6IHN0cmluZ1tdKSA9PlxuICAgIFR4LmNvbnRyYWN0Q2FsbCgnbGlicmFyeScsICdnZXQtYW1vdW50cy1vdXQnLCBbXG4gICAgICAgIHR5cGVzLnVpbnQoYW10SW4pLFxuICAgICAgICB0eXBlcy5wcmluY2lwYWwocm9vdCksXG4gICAgICAgIHR5cGVzLmxpc3QocGF0aC5tYXAodHlwZXMucHJpbmNpcGFsKSksXG4gICAgXSwgZGVwbG95ZXIpXG5cbmNvbnN0IGdldEFtb3VudEluID0gKGNoYWluOiBDaGFpbiwgYW10T3V0OiBudW1iZXIsIHJlc2VydmVJbjogbnVtYmVyLCByZXNlcnZlT3V0OiBudW1iZXIpID0+XG4gICAgY2hhaW4uY2FsbFJlYWRPbmx5Rm4oJ2xpYnJhcnknLCAnZ2V0LWFtb3VudC1pbicsIFtcbiAgICAgICAgdHlwZXMudWludChhbXRPdXQpLFxuICAgICAgICB0eXBlcy51aW50KHJlc2VydmVJbiksXG4gICAgICAgIHR5cGVzLnVpbnQocmVzZXJ2ZU91dCksXG4gICAgICAgIHN3YXBfZmVlLFxuICAgIF0sIGRlcGxveWVyKVxuXG5jb25zdCBnZXRBbW91bnRJbkZlZSA9IChjaGFpbjogQ2hhaW4sIGFtdE91dDogbnVtYmVyLCByZXNlcnZlSW46IG51bWJlciwgcmVzZXJ2ZU91dDogbnVtYmVyLCBzd2FwRmVlOiBudW1iZXJbXSkgPT5cbiAgICBjaGFpbi5jYWxsUmVhZE9ubHlGbignbGlicmFyeScsICdnZXQtYW1vdW50LWluJywgW1xuICAgICAgICB0eXBlcy51aW50KGFtdE91dCksXG4gICAgICAgIHR5cGVzLnVpbnQocmVzZXJ2ZUluKSxcbiAgICAgICAgdHlwZXMudWludChyZXNlcnZlT3V0KSxcbiAgICAgICAgZmVlKHN3YXBGZWVbMF0sIHN3YXBGZWVbMV0pLFxuICAgIF0sIGRlcGxveWVyKVxuXG4vLyB1aW50OiAxMjggYml0cyAofjEwKiozOClcblxuQ2xhcmluZXQudGVzdCh7XG4gICAgbmFtZTogXCJnZXQtYW1vdW50LW91dCBmYWlscyBvbiAwLXZhbHVlc1wiLFxuICAgIGFzeW5jIGZuKGNoYWluOiBDaGFpbikge1xuXG4gICAgICAgIGxldCByZXN1bHRzID0gW1xuICAgICAgICAgICAgZ2V0QW1vdW50T3V0KGNoYWluLCAwLCAxMDAwLCAxMDAwKSxcbiAgICAgICAgICAgIGdldEFtb3VudE91dChjaGFpbiwgMTAwLCAwLCAxMDAwKSxcbiAgICAgICAgICAgIGdldEFtb3VudE91dChjaGFpbiwgMTAwLCAxMDAwLCAwKSxcbiAgICAgICAgICAgIC8vIHByZWNvbmRpdGlvbiAobm90IGluIHVuaXdzYXApOiBhbW91bnQtaWQtYWRqIDwgMFxuICAgICAgICAgICAgZ2V0QW1vdW50T3V0KGNoYWluLCAxLFx0MTAwMDAwMDAwMDAwMDAwMCxcdDEwMDAwMDAwMDAwMDAwMDApLFxuICAgICAgICBdO1xuXG4gICAgICAgIGFzc2VydEVxdWFscyhyZXN1bHRzLmxlbmd0aCwgNClcbiAgICAgICAgcmVzdWx0cy5tYXAoY2hlY2tFcnIpXG4gICAgfVxufSlcblxuQ2xhcmluZXQudGVzdCh7XG4gICAgbmFtZTogXCJnZXQtYW1vdW50LW91dCByZXR1cm5zIHNhbWUgdmFsdWVzIGFzIFVuaXN3YXAgbGliLlwiLFxuICAgIGFzeW5jIGZuKGNoYWluOiBDaGFpbikge1xuXG4gICAgICAgIGNvbnN0IHRlc3RzID0gW1xuICAgICAgICAgIFtbMTAwMDAwMCxcdCcxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwJyxcdDFdLCAwXSxcbiAgICAgICAgICBbWzEwMDAsXHQxMDAwMDAwMDAwMDAwLFx0MTAwMF0sIDBdLFxuICAgICAgICAgIFtbMTAwMCxcdCcxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwJyxcdDEwMDBdLCAwXSxcbiAgICAgICAgICBbWzFfMDAwXzAwMF8wMDAsXHQxXzAwMF8wMDBfMDAwXzAwMF8wMDAsXHQxXzAwMF8wMDBfMDAwXzAwMF8wMDBdLCA5OTZfOTk5XzAwNV0sXG4gICAgICAgICAgW1snMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCcsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCcsXHQxXSwgMF0sXG4gICAgICAgICAgW1snMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCcsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCcsXHQxXSwgMF0sXG4gICAgICAgICAgW1sxMDAwMDAwMDAwMDAwMDAwLFx0MTAwMDAwMCxcdDEwMDAwMDBdLCA5OTk5OTldLFxuICAgICAgICAgIFtbMTBfMDAwLFx0MV8wMDBfMDAwLFx0MV8wMDBfMDAwXSwgOV84NzFdLFxuICAgICAgICAgIFtbMjAwMDAwMCwgbigzMiksIG4oMzIpXSwgMTk5Mzk5OV0sXG4gICAgICAgICAgW1s0LCA5OV85OTBfMTM1LCAxMDBfMDEwXzEwM10sIDNdLFxuICAgICAgICAgIFtbMiwgMiooMTAqKjE4KSwgbigxOCldLCAwXSxcbiAgICAgICAgICBbWzIsIG4oMjEpLCAxXSwgMF0sXG4gICAgICAgICAgW1sxMDAwLCBuKDIwKSwgbigyMCldLCA5OTZdLFxuICAgICAgICAgIFtbMjAwMCwgbigyMCksIG4oMjApXSwgMV85OTNdLFxuICAgICAgICAgIFtbMjAwMDAsIG4oMjApLCBuKDIwKV0sIDE5XzkzOV0sXG4gICAgICAgICAgW1syMDAwMDAsIG4oMjApLCBuKDIwKV0sIDE5OV8zOTldLFxuICAgICAgICAgIFtbMjAwMDAwMCwgbigyMCksIG4oMjApXSwgMV85OTNfOTk5XSxcbiAgICAgICAgICBbWzEwMDAsIDEwMDAsIDEwMDBdLCA0OTldLFxuICAgICAgICAgIFtbMjAwMCwgMTAwMCwgMTAwMF0sIDY2NV0sXG4gICAgICAgICAgW1syMCwgMTAwMDAwLCAxMDAwXSwgMF0sXG4gICAgICAgICAgW1sxMDAwMCwgMTAwMCwgMTAwMF0sIDkwOF0sXG4gICAgICAgICAgW1tuKDEwKSwgbigxOCksIDIqKDEwKioxOCldLCAxOTkzOTk5OTgwMV0sXG4gICAgICAgIF1cblxuICAgICAgICBjb25zdCBmYWlsaW5nVGVzdHMgPSBbXG4gICAgICAgICAgW1syLCBuKDE4KSwgbigxOCldLCAxXSwgICAgICAgLy8gMFxuICAgICAgICAgIFtbMiwgbigxOCksIDIqKDEwKioxOCldLCAzXSwgIC8vIDFcbiAgICAgICAgICBbWzIwLCBuKDIwKSwgbigyMCldLCAxOV0sICAgICAvLyAxOFxuICAgICAgICAgIFtbMjAwLCBuKDIwKSwgbigyMCldLCAxOTldLCAgIC8vIDE5OFxuICAgICAgICAgIFtbMTAsIG4oMjApLCBuKDIwKV0sIDldLCAgICAgIC8vIDhcbiAgICAgICAgICBbWzEwMCwgbigyMCksIG4oMjApXSwgOTldLCAgICAvLyA5OFxuICAgICAgICAgIFtbMzAwLCBuKDIwKSwgbigyMCldLCAyOTldLCAgIC8vIDI5OFxuICAgICAgICBdXG5cbiAgICAgICAgbGV0IHJlc3VsdHMgPSB0ZXN0cy5tYXAoKFtpbnB1dHNdKSA9PiBnZXRBbW91bnRPdXQoY2hhaW4sIC4uLmlucHV0cykpXG4gICAgICAgIHRlc3RzLm1hcCgoWywgZXhwXSwgaSkgPT4gY2hlY2soZXhwLCByZXN1bHRzW2ldKSlcblxuICAgICAgICByZXN1bHRzID0gZmFpbGluZ1Rlc3RzLm1hcCgoW2lucHV0c10pID0+IGdldEFtb3VudE91dChjaGFpbiwgLi4uaW5wdXRzKSlcbiAgICAgICAgZmFpbGluZ1Rlc3RzLm1hcCgoWywgZXhwXSwgaSkgPT4gY2hlY2soZXhwLCByZXN1bHRzW2ldKSlcbiAgICB9LFxufSk7XG5cbkNsYXJpbmV0LnRlc3Qoe1xuICAgIG5hbWU6IFwiZ2V0LWFtb3VudC1pbiByZXR1cm5zIHNhbWUgdmFsdWVzIGFzIFVuaXN3YXAgbGliLlwiLFxuICAgIGFzeW5jIGZuKGNoYWluOiBDaGFpbikge1xuXG4gICAgICAgIGNvbnN0IGVycm9ycyA9IFtcbiAgICAgICAgICAgIFtbMTAwMCwgMTAwMCwgMTAwMF1dLCAgIC8vIGRpdi1ieS0wXG4gICAgICAgICAgICBbWzIwMDAsIDEwMDAsIDEwMDBdXSwgICAvLyB1bmRlcmZsb3dcbiAgICAgICAgICAgIFtbMTAwMDAsIDEwMDAsIDEwMDBdXSwgIC8vIHVuZGVyZmxvd1xuICAgICAgICAgICAgW1syLCBuKDIxKSwgMV1dLCAgICAgICAgLy8gdW5kZXJmbG93XG4gICAgICAgIF1cblxuICAgICAgICBjb25zdCB0ZXN0cyA9IFtcbiAgICAgICAgICBbWycxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwJyxcdDEwMDAsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCddLCAxXSxcbiAgICAgICAgICBbWycxMDAwMDAwMDAwMDAwMDAwMDAwJyxcdDEwMDAsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCddLCAxXSxcbiAgICAgICAgICBbWycxMDAwMDAwMDAwMDAwMDAwMDAwJyxcdDEwMDAwMDAsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCddLCAyXSxcbiAgICAgICAgICBbWzEwMDAsXHQxMDAwMDAwMDAwLFx0JzEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAnXSwgMV0sXG4gICAgICAgICAgW1sxMDAwMDAwMDAwMDAwLFx0MSxcdCcxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwJ10sIDFdLFxuICAgICAgICAgIFtbMTAwMCxcdDEsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCddLCAxXSxcbiAgICAgICAgICBbWzEwMDAwMDAwMDAsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCcsXHQxMDAwMDAwMDAwMDAwMDAwXSwgJzEwMDMwMTAwMzAwOTEyNzM4MjI0NjgnXSxcbiAgICAgICAgICBbWzEwMDAsXHQnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCcsXHQxMDAwMDAwMDAwMDAwMDAwXSwgMTAwMzAwOTAyNzA4M10sXG4gICAgICAgICAgW1sxMDAwMDAwLFx0MSxcdDEwMDAwMDAwMDAwMDAwMDBdLCAxXSxcbiAgICAgICAgICBbWzIwMDAwMDAsIG4oMzIpLCBuKDMyKV0sIDIwMDYwMTldLFxuICAgICAgICAgIFtbNCwgOTlfOTkwXzEzNSwgMTAwXzAxMF8xMDNdLCA1XSxcbiAgICAgICAgICBbWzIsIG4oMTgpLCBuKDE4KV0sIDNdLFxuICAgICAgICAgIFtbMiwgMTAqKjIwLCAxMCoqMjBdLCAzXSxcbiAgICAgICAgICBbWzIsIG4oMjApLCBuKDIwKV0sIDNdLFxuICAgICAgICAgIFtbMjAsIG4oMjApLCBuKDIwKV0sIDIxXSxcbiAgICAgICAgICBbWzIwMCwgbigyMCksIG4oMjApXSwgMjAxXSxcbiAgICAgICAgICBbWzEwLCBuKDIwKSwgbigyMCldLCAxMV0sXG4gICAgICAgICAgW1sxMDAsIG4oMjApLCBuKDIwKV0sIDEwMV0sXG4gICAgICAgICAgW1szMDAsIG4oMjApLCBuKDIwKV0sIDMwMV0sXG4gICAgICAgICAgW1sxMDAwLCBuKDIwKSwgbigyMCldLCAxMDA0XSxcbiAgICAgICAgICBbWzIwMDAsIG4oMjApLCBuKDIwKV0sIDIwMDddLFxuICAgICAgICAgIFtbMjAwMDAsIG4oMjApLCBuKDIwKV0sIDIwXzA2MV0sXG4gICAgICAgICAgW1syMDAwMDAsIG4oMjApLCBuKDIwKV0sIDIwMF82MDJdLFxuICAgICAgICAgIFtbMjAwMDAwMCwgbigyMCksIG4oMjApXSwgMl8wMDZfMDE5XSxcbiAgICAgICAgXVxuXG4gICAgICAgIGxldCByZXN1bHRzID0gdGVzdHMubWFwKChbaW5wdXRzXSkgPT4gZ2V0QW1vdW50SW4oY2hhaW4sIC4uLmlucHV0cykpXG4gICAgICAgIHRlc3RzLm1hcCgoWywgZXhwXSwgaSkgPT4gY2hlY2soZXhwLCByZXN1bHRzW2ldKSlcbiAgfSxcbn0pO1xuXG5DbGFyaW5ldC50ZXN0KHtcbiAgICBuYW1lOiBcImdldC1hbW91bnQtaW4gZmFpbHMgb24gMC12YWx1ZXNcIixcbiAgICBhc3luYyBmbihjaGFpbjogQ2hhaW4pIHtcblxuICAgICAgICBsZXQgcmVzdWx0cyA9IFtcbiAgICAgICAgICBnZXRBbW91bnRJbihjaGFpbiwgMCwgMTAwMDAwMCwgMTAwMDAwMCksXG4gICAgICAgICAgZ2V0QW1vdW50SW4oY2hhaW4sIDEwMDAwMDAwLCAwLCAxMDAwMDAwKSxcbiAgICAgICAgICBnZXRBbW91bnRJbihjaGFpbiwgMTAwMCwgMTAwMDAwMCwgMCksXG4gICAgICAgIF1cblxuICAgICAgICByZXN1bHRzLm1hcChjaGVja0VycilcbiAgICB9LFxufSk7XG5cbkNsYXJpbmV0LnRlc3Qoe1xuICAgIG5hbWU6IFwicXVvdGUgcmV0dXJucyBzYW1lIHZhbHVlcyBhcyBVbmlzd2FwIGxpYi5cIixcbiAgICBhc3luYyBmbihjaGFpbjogQ2hhaW4pIHtcblxuICAgICAgICBjb25zdCB0ZXN0cyA9IFtcbiAgICAgICAgICBbWycxMDAwMDAwMDAwMDAwMDAwMDAwJywgJzEwMDAwMDAwMDAwMDAwMDAwMDAwMDAnLCAxMDAwMDAwMDAwMDAwXSwgMTAwMDAwMDAwMF0sXG4gICAgICAgICAgW1sxMDAwMDAwMDAwMDAwMDAwLCAxMDAwMDAwMDAwMDAwMDAwLCAxMDAwMDAwMDAwMDAwMDAwXSwgMTAwMDAwMDAwMDAwMDAwMF0sXG4gICAgICAgICAgW1sxMDAwMDAwMDAwLCAxMDAwMDAwMDAwMDAwLCAnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCddLCAnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMCddLFxuICAgICAgICAgIFtbJzEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAnLCAxMDAwMDAwLCAxMDAwXSwgJzEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAnXSxcbiAgICAgICAgICBbWzEsIDEwMDAwMDAwMDAsICcxMDAwMDAwMDAwMDAwMDAwMDAwJ10sIDEwMDAwMDAwMDBdLFxuICAgICAgICAgIFtbJzEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAnLCAnMTAwMDAwMDAwMDAwMDAwMDAwMDAwMCcsIDEwMDAwMDBdLCAxMDAwMDAwMDAwXSxcbiAgICAgICAgICBbWzEsIDEwMDAwMDAsICcxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwJ10sICcxMDAwMDAwMDAwMDAwMDAwMDAwMDAwJ10sXG4gICAgICAgICAgW1sxMDAwMDAwMDAwLCAxMDAwMDAwMDAwMDAwLCAnMTAwMDAwMDAwMDAwMDAwMDAwMCddLCAxMDAwMDAwMDAwMDAwMDAwXSxcbiAgICAgICAgICBbWzEwMDAwMDAsIDEwMDAwMDAsIDEwMDAwMDBdLCAxMDAwMDAwXSxcbiAgICAgICAgICBbWycxMDAwMDAwMDAwMDAwMDAwMDAwJywgJzEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAnLCAxMDAwXSwgMF0sXG4gICAgICAgIF1cblxuICAgICAgICBsZXQgcmVzdWx0cyA9IHRlc3RzLm1hcCgoW2lucHV0c10pID0+IHF1b3RlKGNoYWluLCAuLi5pbnB1dHMpKVxuICAgICAgICB0ZXN0cy5tYXAoKFssIGV4cF0sIGkpID0+IGNoZWNrKGV4cCwgcmVzdWx0c1tpXSkpXG4gIH0sXG59KTtcbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFDQSxTQUFTLFFBQVEsRUFBRSxFQUFFLEVBQWtCLEtBQUssUUFBb0IsOENBQThDLENBQUM7QUFDL0csU0FBUyxZQUFZLFFBQVEsaURBQWlELENBQUM7QUFDL0UsU0FBUyxRQUFRLFFBQVEsZUFBZSxDQUFDO0FBQ3pDLFNBQVMsQ0FBQyxFQUFFLEtBQUssRUFBRSxRQUFRLEVBQUUsR0FBRyxRQUFRLFdBQVcsQ0FBQTtBQUVuRCxNQUFNLFFBQVEsR0FBRywyQ0FBMkM7QUFFNUQsc0NBQXNDO0FBRXRDLE1BQU0sS0FBSyxHQUFHLENBQUMsS0FBWSxFQUFFLEtBQWEsRUFBRSxTQUFpQixFQUFFLFVBQWtCLEdBQzdFLEtBQUssQ0FBQyxjQUFjLENBQUMsU0FBUyxFQUFFLE9BQU8sRUFBRTtRQUNyQyxLQUFLLENB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

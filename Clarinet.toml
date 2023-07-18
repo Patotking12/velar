@@ -1,0 +1,89 @@
+[project]
+name = 'velar'
+description = ''
+authors = []
+telemetry = true
+cache_dir = '.cache'
+requirements = []
+[contracts.DAI]
+path = 'contracts/DAI.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.ETH]
+path = 'contracts/ETH.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.ETH-2]
+path = 'contracts/ETH-2.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.core]
+path = 'contracts/core.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.distributor]
+path = 'contracts/distributor.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.ft-plus-trait]
+path = 'contracts/ft-plus-trait.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.library-v2]
+path = 'contracts/library-v2.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.lp-token]
+path = 'contracts/lp-token.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.lp-token-2]
+path = 'contracts/lp-token-2.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.router]
+path = 'contracts/router.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.sip-010-trait-ft-standard]
+path = 'contracts/sip-010-trait-ft-standard.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.staking]
+path = 'contracts/staking.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.staking-core]
+path = 'contracts/staking-core.clar'
+clarity_version = 2
+epoch = 2.1
+
+[contracts.token-mngr-trait]
+path = 'contracts/token-mngr-trait.clar'
+clarity_version = 1
+epoch = 2.05
+
+[contracts.velar]
+path = 'contracts/velar.clar'
+clarity_version = 1
+epoch = 2.05
+[repl.analysis]
+passes = ['check_checker']
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
