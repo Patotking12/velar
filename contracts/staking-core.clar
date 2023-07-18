@@ -103,10 +103,8 @@
                 ;; I think we don't need to assert this, it will always be true
                 (>= epoch GENESIS-EPOCH)
                 ;; Checks if Current Epoch is greater than or equal than the epoch retreived from total-staked
-                ;; Will always be true... don't need to assert this
                 (>= epoch (get epoch t-staked))
                 ;; Checks if Current Epoch is greater than or equal than the epoch retreived from user-staked
-                ;; Will always be true... don't need to assert this
                 (>= epoch (get epoch u-staked))
                 ;; Check if the epoch from total-staked is greater than or equal to the epoch from user-staked
                 (>= (get epoch t-staked) (get epoch u-staked))
@@ -287,10 +285,6 @@
 )
 
 (define-read-only (min (x uint) (y uint)) (if (<= x y) x y))
-
-(define-read-only (get-balance-protocol)
-    (contract-call? .velar get-balance .staking-core)
-)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; staking distribution over time
